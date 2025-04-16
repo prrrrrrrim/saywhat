@@ -14,13 +14,21 @@ class CoverPage extends StatelessWidget {
         );
       },
       child: Scaffold(
-        backgroundColor: const Color(0xE8ECEFDA),
-        body: Center(
+        backgroundColor: const Color(0xFFECEFDA), // light beige/greenish tone
+        body: SafeArea(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.language, size: 120), // Replace with your custom globe/chat icon if needed
-              const SizedBox(height: 30),
+              const Spacer(flex: 3),
+              // Logo
+              Center(
+                child: Image.asset(
+                  'assets/logo.png',
+                  height: 180,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // App name
               const Text(
                 'SayWhat',
                 style: TextStyle(
@@ -28,15 +36,17 @@ class CoverPage extends StatelessWidget {
                   fontFamily: 'Serif',
                 ),
               ),
-              const SizedBox(height: 80),
+              const Spacer(flex: 4),
+              // Tap to start text
               const Text(
                 'Tap To Start',
                 style: TextStyle(
-                  fontSize: 24,
-                  letterSpacing: 4,
+                  fontSize: 22,
                   fontFamily: 'monospace',
+                  letterSpacing: 2.5,
                 ),
               ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
