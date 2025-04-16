@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'transcribe_page.dart';
+import 'file_converter_page.dart';
+import 'translate_page.dart';
+import 'queue_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -34,11 +38,39 @@ class HomePage extends StatelessWidget {
           crossAxisCount: 2,
           mainAxisSpacing: 20,
           crossAxisSpacing: 20,
-          children: const [
-            _HomeCard(title: "Transcribe", icon: Icons.text_snippet, color: Color(0xFFECEFDA)),
-            _HomeCard(title: "File Converter", icon: Icons.compare_arrows, color: Color(0xFFE8DFF9)),
-            _HomeCard(title: "Translate", icon: Icons.language, color: Color(0xFFE8DFF9)),
-            _HomeCard(title: "Queue", icon: Icons.hourglass_bottom, color: Color(0xFFECEFDA)),
+          children: [
+            _HomeCard(
+              title: "Transcribe",
+              imagePath: 'assets/transcribe.jpg',
+              color: const Color(0xFFECEFDA),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const TranscribePage()));
+              },
+            ),
+            _HomeCard(
+              title: "File Converter",
+              imagePath: 'assets/converter.jpg',
+              color: const Color(0xFFE8DFF9),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const FileConverterPage()));
+              },
+            ),
+            _HomeCard(
+              title: "Translate",
+              imagePath: 'assets/translate.jpg',
+              color: const Color(0xFFE8DFF9),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const TranslatePage()));
+              },
+            ),
+            _HomeCard(
+              title: "Queue",
+              imagePath: 'assets/queue.jpg',
+              color: const Color(0xFFECEFDA),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const QueuePage()));
+              },
+            ),
           ],
         ),
       ),
@@ -53,26 +85,42 @@ class HomePage extends StatelessWidget {
 
 class _HomeCard extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final String imagePath;
   final Color color;
+  final VoidCallback onTap;
 
-  const _HomeCard({required this.title, required this.icon, required this.color});
+  const _HomeCard({
+    required this.title,
+    required this.imagePath,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 50),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 18)),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Image.asset(imagePath),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
