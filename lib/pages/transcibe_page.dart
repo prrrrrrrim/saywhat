@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 
-class TranslatePage extends StatelessWidget {
-  const TranslatePage({super.key});
+class TranscribePage extends StatelessWidget {
+  const TranscribePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Translate"),
+        title: const Text("Transcribe"),
         backgroundColor: const Color(0xFFECEFDA),
-        foregroundColor: Colors.black,
+        foregroundColor: Colors.black, // ensures the back icon is visible
       ),
       body: const Center(
-        child: Text("Translate Page"),
+        child: Text("Transcribe Page"),
       ),
     );
   }
