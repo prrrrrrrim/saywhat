@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "949354399842",
+    "firebase_url": "https://saywhat1111-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "saywhat1111",
+    "storage_bucket": "saywhat1111.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:949354399842:android:d50219c99558bfe57ba93b",
+        "android_client_info": {
+          "package_name": "com.example.saywhat_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "949354399842-j1lqi6j6303em07642v40frpsh2l1cu3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPsSgD-1QWNJeh6Yi8sv5YXqAgdvzZTxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "949354399842-j1lqi6j6303em07642v40frpsh2l1cu3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
