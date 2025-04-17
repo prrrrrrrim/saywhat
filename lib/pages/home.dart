@@ -3,6 +3,7 @@ import 'transcribe_page.dart';
 import 'file_converter_page.dart';
 import 'translate_page.dart';
 import 'queue_page.dart';
+import 'package:saywhat_app/service/auth.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -28,7 +29,68 @@ class HomePage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.account_circle, size: 32),
-            onPressed: () {},
+            onPressed: () {
+  showDialog(
+    context: context,
+    builder: (context) {
+      String email = '';
+      String password = '';
+      bool  isLogin = true;
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text(isLogin ? 'Sign In' : 'Sign Up'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  onChanged: (value) => email = value,
+                ),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Password'),
+                  obscureText: true,
+                  onChanged: (value) => password = value,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  final user = isLogin
+                      ? await signIn(email, password)
+                      : await signUp(email, password);
+
+                  if (user != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${isLogin ? 'Signed in' : 'Signed up'} as ${user.email}')),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${isLogin ? 'Sign-in' : 'Sign-up'} failed')),
+                    );
+                  }
+                },
+                child: Text(isLogin ? 'Sign In' : 'Sign Up'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    isLogin = !isLogin;
+                  });
+                },
+                child: Text(isLogin ? 'Need an account? Sign Up' : 'Have an account? Sign In'),
+              )
+            ],
+          );
+        },
+      );
+    },
+  );
+},
+
           )
         ],
       ),
