@@ -4,6 +4,7 @@ import 'transcribe_page.dart';
 import 'file_converter_page.dart';
 import 'translate_page.dart';
 import 'queue_page.dart';
+// import 'package:saywhat_app/service/auth.dart';
 
 bool isLoggedIn = true; // for now, replace with real auth logic
 
