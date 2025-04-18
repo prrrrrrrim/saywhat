@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'home.dart';
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
 
@@ -10,10 +10,10 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController(); // Add this if using password
+  final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
-  bool _isSignUp = true;
+  bool _isSignUp = true; // This flag determines if it's Sign Up or Sign In
 
   void _submit() async {
     final email = _emailController.text.trim();
@@ -34,7 +34,7 @@ class _AuthPageState extends State<AuthPage> {
             .signInWithEmailAndPassword(email: email, password: password);
       }
 
-      // ✅ Show success pop-up
+      // Show success pop-up and redirect to HomePage
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -46,14 +46,21 @@ class _AuthPageState extends State<AuthPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Close the dialog
+                // Navigate to the Home Page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => HomePage()),
+                );
+              },
               child: const Text('OK'),
             ),
           ],
         ),
       );
     } catch (e) {
-      // ❌ Show error pop-up
+      // Show error pop-up
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -71,7 +78,7 @@ class _AuthPageState extends State<AuthPage> {
       setState(() => _isLoading = false);
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,13 +97,13 @@ class _AuthPageState extends State<AuthPage> {
                 ),
               ),
               const SizedBox(height: 30),
-              const Text(
-                'Create an account',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              Text(
+                _isSignUp ? 'Create an account' : 'Sign in to your account',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Enter your email to sign up for this app',
+                'Enter your email and password to sign up or sign in.',
                 style: TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 24),
@@ -112,13 +119,23 @@ class _AuthPageState extends State<AuthPage> {
                 ),
               ),
               const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: true, // Hide password text
+                decoration: InputDecoration(
+                  hintText: 'password',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Handle email auth or navigate to OTP/password
-                  },
+                  onPressed: _isLoading ? null : _submit, // Trigger _submit
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
@@ -126,7 +143,9 @@ class _AuthPageState extends State<AuthPage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Continue'),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(_isSignUp ? 'Sign Up' : 'Sign In'),
                 ),
               ),
               const SizedBox(height: 20),
@@ -149,7 +168,7 @@ class _AuthPageState extends State<AuthPage> {
                     // Handle Google Sign In
                   },
                   icon: Image.asset(
-                    'assets/google.png', // Make sure this image exists
+                    'assets/google.png',
                     height: 24,
                   ),
                   label: const Text(
@@ -185,6 +204,17 @@ class _AuthPageState extends State<AuthPage> {
                 style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
               const SizedBox(height: 12),
+              // Toggle between Sign Up and Sign In
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isSignUp = !_isSignUp; // Switch between Sign Up and Sign In
+                  });
+                },
+                child: Text(_isSignUp
+                    ? 'Already have an account? Sign In'
+                    : 'Don\'t have an account? Sign Up'),
+              ),
             ],
           ),
         ),
@@ -192,4 +222,3 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 }
-
