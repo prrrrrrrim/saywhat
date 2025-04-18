@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -9,7 +10,68 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController(); // Add this if using password
 
+  bool _isLoading = false;
+  bool _isSignUp = true;
+
+  void _submit() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      UserCredential userCredential;
+
+      if (_isSignUp) {
+        userCredential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+      } else {
+        userCredential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password);
+      }
+
+      // ✅ Show success pop-up
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Success 🎉"),
+          content: Text(
+            _isSignUp
+                ? 'Account created for ${userCredential.user!.email}'
+                : 'Welcome back, ${userCredential.user!.email}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      // ❌ Show error pop-up
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Login Failed ❌"),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Try Again'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,3 +192,4 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 }
+
