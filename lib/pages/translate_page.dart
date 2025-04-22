@@ -1,18 +1,103 @@
 import 'package:flutter/material.dart';
 
-class TranslatePage extends StatelessWidget {
+class TranslatePage extends StatefulWidget {
   const TranslatePage({super.key});
 
   @override
+  State<TranslatePage> createState() => _TranslatePageState();
+}
+
+class _TranslatePageState extends State<TranslatePage> {
+  final TextEditingController _inputController = TextEditingController();
+  String _translatedText = 'Translation';
+  String? _fromLang;
+  String? _toLang;
+
+  final List<String> _languages = ['English', 'Chinese', 'Thai'];
+
+  void _translateText() {
+    // Dummy translation for demonstration
+    setState(() {
+      _translatedText = "${_inputController.text} (translated to $_toLang)";
+    });
+
+    // Replace this logic with your actual translation backend call
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final Color darkGreen = const Color(0xFF06261C);
+    final Color lightPurple = const Color(0xFFE7DDF7);
+
     return Scaffold(
+      backgroundColor: darkGreen,
       appBar: AppBar(
-        title: const Text("Translate"),
-        backgroundColor: const Color(0xFFECEFDA),
-        foregroundColor: Colors.black,
+        backgroundColor: const Color(0xFFEAEBD5),
+        title: const Text('Translate', style: TextStyle(color: Colors.black)),
+        leading: IconButton(
+          icon: const Icon(Icons.home, color: Colors.black),
+          onPressed: () {
+            Navigator.pop(context); // Go back to home
+          },
+        ),
       ),
-      body: const Center(
-        child: Text("Translate Page"),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            DropdownButtonFormField<String>(
+              value: _fromLang,
+              items: _languages.map((lang) => DropdownMenuItem(value: lang, child: Text(lang))).toList(),
+              onChanged: (value) => setState(() => _fromLang = value),
+              decoration: const InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                hintText: "Choose a language",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _inputController,
+              onChanged: (_) => _translateText(),
+              maxLines: 6,
+              maxLength: 1000,
+              decoration: const InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                hintText: "Typed here...",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _toLang,
+              items: _languages.map((lang) => DropdownMenuItem(value: lang, child: Text(lang))).toList(),
+              onChanged: (value) => setState(() => _toLang = value),
+              decoration: const InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                hintText: "Choose a language",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: lightPurple,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                _translatedText,
+                style: const TextStyle(color: Colors.black54),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
