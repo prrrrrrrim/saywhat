@@ -4,6 +4,7 @@ import 'transcribe_page.dart';
 import 'file_converter_page.dart';
 import 'translate_page.dart';
 import 'queue_page.dart';
+import 'tutorial_page.dart';
 // import 'package:saywhat_app/service/auth.dart';
 
 bool isLoggedIn = true; // for now, replace with real auth logic
@@ -94,10 +95,16 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           floatingActionButton: FloatingActionButton(
-            onPressed: () {},
-            backgroundColor: const Color(0xFFE8DFF9),
-            child: const Icon(Icons.help_outline, color: Colors.black),
-          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TutorialPage()),
+            );
+          },
+          backgroundColor: const Color(0xFFE8DFF9),
+          child: const Icon(Icons.help_outline, color: Colors.black),
+        ),
+
         ),
 
         // Slide-in History Drawer

@@ -66,6 +66,7 @@ flutter:
     - assets/translate.jpg
     - assets/queue.jpg
     - assets/google.png
+    - assets/HomePage.png
 
 
   # An image asset can refer to one or more resolution-specific "variants", see
