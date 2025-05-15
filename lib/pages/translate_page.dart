@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // Import Cloud Functions package
+// import 'package:firebase_auth/firebase_auth.dart';
 
 class TranslatePage extends StatefulWidget {
   const TranslatePage({super.key});
@@ -15,13 +17,36 @@ class _TranslatePageState extends State<TranslatePage> {
 
   final List<String> _languages = ['English', 'Chinese', 'Thai'];
 
-  void _translateText() {
-    // Dummy translation for demonstration
-    setState(() {
-      _translatedText = "${_inputController.text} (translated to $_toLang)";
-    });
+  void _translateText() async {
+    try {
+      String textToTranslate = _inputController.text;
 
-    // Replace this logic with your actual translation backend call
+      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable(
+        'translateText',
+      );
+
+      final response = await callable.call({
+        'text': textToTranslate,
+        'targetLang': _toLang,
+        'fromLang': _fromLang,
+      });
+
+      if (response.data != null && response.data['translation'] != null) {
+        String translated = response.data['translation'];
+
+        setState(() {
+          _translatedText = translated;
+        });
+      } else {
+        setState(() {
+          _translatedText = 'Translation failed or no content returned.';
+        });
+      }
+    } catch (error) {
+      setState(() {
+        _translatedText = 'Error: $error';
+      });
+    }
   }
 
   @override
@@ -47,7 +72,10 @@ class _TranslatePageState extends State<TranslatePage> {
           children: [
             DropdownButtonFormField<String>(
               value: _fromLang,
-              items: _languages.map((lang) => DropdownMenuItem(value: lang, child: Text(lang))).toList(),
+              items: _languages
+                  .map((lang) =>
+                      DropdownMenuItem(value: lang, child: Text(lang)))
+                  .toList(),
               onChanged: (value) => setState(() => _fromLang = value),
               decoration: const InputDecoration(
                 filled: true,
@@ -59,7 +87,7 @@ class _TranslatePageState extends State<TranslatePage> {
             const SizedBox(height: 12),
             TextField(
               controller: _inputController,
-              onChanged: (_) => _translateText(),
+              onSubmitted: (_) => _translateText(), // Trigger on Enter
               maxLines: 6,
               maxLength: 1000,
               decoration: const InputDecoration(
@@ -72,9 +100,26 @@ class _TranslatePageState extends State<TranslatePage> {
               ),
             ),
             const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _translateText,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text("Translate"),
+            ),
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _toLang,
-              items: _languages.map((lang) => DropdownMenuItem(value: lang, child: Text(lang))).toList(),
+              items: _languages
+                  .map((lang) =>
+                      DropdownMenuItem(value: lang, child: Text(lang)))
+                  .toList(),
               onChanged: (value) => setState(() => _toLang = value),
               decoration: const InputDecoration(
                 filled: true,
