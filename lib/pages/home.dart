@@ -65,7 +65,7 @@ class HomePage extends StatelessWidget {
           crossAxisSpacing: 20,
           children: [
             _HomeCard(
-              imagePath: 'assets/transcribe.jpg',
+              imagePath: 'assets/transcribe.jpg', // link to transcribe page
               color: const Color(0xFFE3E7D3),
               onTap: () => _navigateIfLoggedIn(context, const TranscribePage(), user),
             ),
