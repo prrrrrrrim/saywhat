@@ -6,6 +6,7 @@ import 'transcribe_page.dart';
 import 'file_converter_page.dart';
 import 'translate_page.dart';
 import 'queue_page.dart';
+import 'tutorial_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -88,10 +89,15 @@ class HomePage extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: const Color(0xFFE8DFF9),
-        child: const Icon(Icons.help_outline, color: Colors.black),
-      ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TutorialPage()),
+            );
+          },
+          backgroundColor: const Color(0xFFE8DFF9),
+          child: const Icon(Icons.help_outline, color: Colors.black),
+        ),
     );
   }
 
