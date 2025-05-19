@@ -7,13 +7,13 @@ import 'file_converter_page.dart';
 import 'translate_page.dart';
 import 'queue_page.dart';
 import 'tutorial_page.dart';
+import 'history_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Listen for authentication state using Provider
     final User? user = Provider.of<User?>(context);
 
     return Scaffold(
@@ -27,27 +27,25 @@ class HomePage extends StatelessWidget {
             style: TextStyle(fontFamily: 'Serif', fontSize: 28),
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            // Handle the menu
-          },
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
         ),
         actions: [
-          if (user != null) // Show additional icon if user is logged in
+          if (user != null)
             IconButton(
               icon: const Icon(Icons.notifications, size: 32),
               onPressed: () {
-                // Handle notifications press here
                 print('Notifications tapped!');
               },
             ),
           IconButton(
             icon: const Icon(Icons.account_circle, size: 32),
             onPressed: () {
-              // Navigate to the authentication page if the user is logged out
               if (user != null) {
-                FirebaseAuth.instance.signOut(); // Log out user
+                FirebaseAuth.instance.signOut();
               } else {
                 Navigator.push(
                   context,
@@ -58,6 +56,7 @@ class HomePage extends StatelessWidget {
           ),
         ],
       ),
+      drawer: const HistoryDrawer(), // link to history drawer
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: GridView.count(
@@ -66,7 +65,7 @@ class HomePage extends StatelessWidget {
           crossAxisSpacing: 20,
           children: [
             _HomeCard(
-              imagePath: 'assets/transcribe.jpg',
+              imagePath: 'assets/transcribe.jpg', // link to transcribe page
               color: const Color(0xFFE3E7D3),
               onTap: () => _navigateIfLoggedIn(context, const TranscribePage(), user),
             ),
@@ -89,19 +88,18 @@ class HomePage extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TutorialPage()),
-            );
-          },
-          backgroundColor: const Color(0xFFE8DFF9),
-          child: const Icon(Icons.help_outline, color: Colors.black),
-        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TutorialPage()),
+          );
+        },
+        backgroundColor: const Color(0xFFE8DFF9),
+        child: const Icon(Icons.help_outline, color: Colors.black),
+      ),
     );
   }
 
-  // Navigate based on the user's login status
   void _navigateIfLoggedIn(BuildContext context, Widget page, User? user) {
     if (user != null) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => page));
