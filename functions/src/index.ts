@@ -93,3 +93,4 @@ export const summarize = onCall(async (request) => {
     throw new HttpsError("internal", "An unexpected error occurred.");
   }
 });
+
