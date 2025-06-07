@@ -235,34 +235,32 @@ class _TutorialPageState extends State<TutorialPage> {
             ],
           ),
 
+          //tutorial_page.dart => replace positioned 
+
           Positioned(
             bottom: 20,
             left: 0,
             right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (_currentPage > 0)
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, size: 36),
-                    onPressed: () {
-                      _controller.previousPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
-                  ),
-                const SizedBox(width: 40),
-                if (_currentPage < 5)
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward, size: 36),
-                    onPressed: () {
-                      _controller.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(6, (index) {
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                      width: _currentPage == index ? 10 : 4,
+                      height: _currentPage == index ? 10 : 4,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _currentPage == index
+                            ? Colors.black
+                            : Colors.grey[400],
+                      ),
+                    );
+                  }),
+                ),
               ],
             ),
           ),

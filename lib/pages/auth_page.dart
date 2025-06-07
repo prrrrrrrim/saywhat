@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
 
@@ -78,7 +79,42 @@ class _AuthPageState extends State<AuthPage> {
       setState(() => _isLoading = false);
     }
   }
+  Future<void> _signInWithGoogle() async {
+  try {
+    final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return; // user canceled
 
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+
+    final UserCredential userCredential =
+        await FirebaseAuth.instance.signInWithCredential(credential);
+
+    // Navigate to HomePage
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => HomePage()),
+    );
+  } catch (e) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Google Sign-In Failed ❌"),
+        content: Text(e.toString()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,9 +200,9 @@ class _AuthPageState extends State<AuthPage> {
                 width: double.infinity,
                 height: 48,
                 child: OutlinedButton.icon(
-                  onPressed: () {
+                  onPressed: _signInWithGoogle,
                     // Handle Google Sign In
-                  },
+                  
                   icon: Image.asset(
                     'assets/google.png',
                     height: 24,
