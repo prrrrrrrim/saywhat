@@ -112,6 +112,10 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
 
   const filePath = object.name;
   const contentType = object.contentType;
+  if (!filePath || !filePath.endsWith('.mp4')) {
+  console.log('Not an MP4 file. Skipping...');
+  return;
+}
 
   // Log contentType to debug
   console.log('File contentType:', contentType);
@@ -123,11 +127,13 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
   const tempOutput = path.join(os.tmpdir(), `${baseName}.mp3`);
   const outputStoragePath = path.join(fileDir, `${baseName}.mp3`);
 
-  const progressRef = db.collection('conversions').doc(fileName);
+  // Get userId from filePath structure: 'uploads/{userId}/{fileName}.mp4'
+  const userId = fileDir.split('/')[1];
+  const progressRef = db.collection('users').doc(userId).collection('conversions').doc(fileName);
 
   try {
     const bucket = admin.storage().bucket(object.bucket);
-
+    
     // Download the video file
     await progressRef.set({ status: 'downloading', progress: 10 });
     await bucket.file(filePath).download({ destination: tempInput });

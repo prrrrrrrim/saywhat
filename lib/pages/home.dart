@@ -82,7 +82,7 @@ class HomePage extends StatelessWidget {
             _HomeCard(
               imagePath: 'assets/queue.jpg',
               color: const Color(0xFFE3E7D3),
-              onTap: () => _navigateIfLoggedIn(context, const QueuePage(fileName: '',), user),
+              onTap: () => _navigateIfLoggedIn(context, const QueuePage(), user),
             ),
           ],
         ),

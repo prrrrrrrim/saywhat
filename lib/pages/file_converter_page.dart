@@ -59,74 +59,75 @@ class _FileConverterPageState extends State<FileConverterPage> {
   }
 
   Future<void> _startConversion() async {
-    final isFileSelected =
-        kIsWeb
-            ? _webFileBytes != null && _webFileName != null
-            : _selectedFile != null;
+  final isFileSelected = kIsWeb
+      ? _webFileBytes != null && _webFileName != null
+      : _selectedFile != null;
 
-    if (!isFileSelected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload a file first')),
-      );
-      return;
+  if (!isFileSelected) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please upload a file first')),
+    );
+    return;
+  }
+
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('User not authenticated')),
+    );
+    return;
+  }
+
+  final userId = currentUser.uid;
+  final fileName = kIsWeb
+      ? _webFileName!
+      : _selectedFile!.path.split('/').last;
+
+  try {
+    // Upload to Firebase Storage
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('uploads/$userId/$fileName');
+    UploadTask uploadTask;
+
+    if (kIsWeb) {
+      uploadTask = storageRef.putData(_webFileBytes!);
+    } else {
+      uploadTask = storageRef.putFile(_selectedFile!);
     }
 
-    // Get the current authenticated user
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('User not authenticated')));
-      return;
-    }
+    final snapshot = await uploadTask;
+    final downloadUrl = await snapshot.ref.getDownloadURL();
 
-    final userId = currentUser.uid;
-    final fileName =
-        kIsWeb ? _webFileName! : _selectedFile!.path.split('/').last;
+    // Create progress doc in subcollection
+    final docRef = FirebaseFirestore.instance
+        .collection("users")
+        .doc(userId)
+        .collection("conversions")
+        .doc(fileName);
 
-    try {
-      // Upload the file to Firebase Storage (this will trigger your Cloud Function)
-      final storageRef = FirebaseStorage.instance.ref().child(
-        'uploads/$userId/$fileName',
-      );
-      UploadTask uploadTask;
+    await docRef.set({
+      'fileName': fileName,
+      'status': 'waiting',
+      'progress': 0,
+      'uploadedAt': Timestamp.now(),
+      'downloadUrl': downloadUrl,
+    });
 
-      if (kIsWeb) {
-        uploadTask = storageRef.putData(_webFileBytes!);
-      } else {
-        uploadTask = storageRef.putFile(_selectedFile!);
-      }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('File uploaded and conversion started')),
+    );
 
-      final snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-
-      // Create Firestore progress tracker document (used by QueuePage)
-      await FirebaseFirestore.instance
-          .collection("conversions")
-          .doc(fileName) // Match doc ID with filename
-          .set({
-            'fileName': fileName,
-            'userId': userId,
-            'status': 'waiting',
-            'progress': 0,
-            'uploadedAt': Timestamp.now(),
-            'downloadUrl': downloadUrl,
-          });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File uploaded and conversion started')),
-      );
-
-      // Navigate to progress page
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => QueuePage(fileName: fileName)),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
-    }
+    // Navigate to QueuePage, without passing key
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const QueuePage()),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Upload failed: $e')),
+    );
+  }
   }
 
   @override
