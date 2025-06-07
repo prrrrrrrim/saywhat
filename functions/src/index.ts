@@ -9,18 +9,19 @@
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
 
-import * as functions from "firebase-functions";
-import ffmpeg from "fluent-ffmpeg";
-import * as ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import * as os from "os";
-import * as path from "path";
-import * as fs from "fs";
-import Busboy from "busboy";
+
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
+
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import OpenAI from "openai";
 import { TranslationServiceClient } from "@google-cloud/translate"; // Google Cloud Translation Client
+import { onObjectFinalized } from 'firebase-functions/storage';
 
 
 admin.initializeApp();
@@ -101,90 +102,76 @@ export const summarize = onCall(async (request) => {
   }
 });
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const db = admin.firestore();
 
-export const convertMp4ToMp3 = functions.https.onRequest((req, res) => {
-  if (req.method !== "POST") {
-    res.status(405).send("Method Not Allowed");
-    return;
-  }
+// Set ffmpeg binary path
+ffmpeg.setFfmpegPath(ffmpegStatic!);
 
-  const busboy = Busboy({ headers: req.headers });
-  const tmpdir = os.tmpdir();
+export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (event) => {
+  const object = event.data;
 
-  let uploadPath = "";
-  let outputPath = "";
-  let cleanupFiles: string[] = [];
+  const filePath = object.name;
+  const contentType = object.contentType;
 
-  busboy.on("file", (fieldname, file, info) => {
-    const { filename } = info;
-    const ext = path.extname(filename);
-    if (ext !== ".mp4") {
-      res.status(400).send("Only .mp4 files are allowed.");
-      file.resume(); // Discard the stream
-      return;
-    }
+  // Log contentType to debug
+  console.log('File contentType:', contentType);
 
-    uploadPath = path.join(tmpdir, filename);
-    outputPath = uploadPath.replace(".mp4", ".mp3");
-    cleanupFiles = [uploadPath, outputPath];
+  const fileName = path.basename(filePath);
+  const fileDir = path.dirname(filePath);
+  const baseName = path.basename(fileName, '.mp4');
+  const tempInput = path.join(os.tmpdir(), fileName);
+  const tempOutput = path.join(os.tmpdir(), `${baseName}.mp3`);
+  const outputStoragePath = path.join(fileDir, `${baseName}.mp3`);
 
-    const writeStream = fs.createWriteStream(uploadPath);
+  const progressRef = db.collection('conversions').doc(fileName);
 
-    writeStream.on("error", (err) => {
-      console.error("File write error:", err);
-      res.status(500).send("Failed to write file");
-      cleanupFiles.forEach(file => {
-        try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
-      });
-    });
+  try {
+    const bucket = admin.storage().bucket(object.bucket);
 
-    file.pipe(writeStream);
+    // Download the video file
+    await progressRef.set({ status: 'downloading', progress: 10 });
+    await bucket.file(filePath).download({ destination: tempInput });
 
-    writeStream.on("finish", () => {
-      ffmpeg(uploadPath)
-        .format("mp3")
-        .output(outputPath)
-        .on("end", () => {
-          const outputFilename = path.basename(filename, ".mp4") + ".mp3";
-          res.setHeader("Content-Type", "audio/mpeg");
-          res.setHeader("Content-Disposition", `attachment; filename="${outputFilename}"`);
-          
-          const readStream = fs.createReadStream(outputPath);
-          readStream.pipe(res);
-
-          readStream.on("close", () => {
-            cleanupFiles.forEach(file => {
-              try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
-            });
-          });
-
-          readStream.on("error", (err) => {
-            console.error("File read error:", err);
-            res.status(500).send("Failed to read converted file");
-            cleanupFiles.forEach(file => {
-              try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
-            });
-          });
+    // Convert to MP3 with progress
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(tempInput)
+        .output(tempOutput)
+        .on('start', () => {
+          console.log('FFmpeg started');
         })
-        .on("error", (err) => {
-          console.error("FFmpeg error:", err);
-          res.status(500).send("Conversion failed");
-          cleanupFiles.forEach(file => {
-            try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
-          });
+        .on('progress', async (progress) => {
+          const percent = Math.floor(progress.percent ?? 50);
+          console.log(`Progress: ${percent}%`);
+          await progressRef.update({ status: 'converting', progress: percent });
+        })
+        .on('end', async () => {
+          console.log('FFmpeg finished');
+          await progressRef.update({ status: 'uploading', progress: 95 });
+          resolve();
+        })
+        .on('error', async (err) => {
+          console.error('FFmpeg error:', err);
+          await progressRef.update({ status: 'error', error: err.message });
+          reject(err);
         })
         .run();
     });
-  });
 
-  busboy.on("error", (err) => {
-    console.error("Busboy error:", err);
-    res.status(500).send("File upload error");
-    cleanupFiles.forEach(file => {
-      try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
+    // Upload to Storage
+    await bucket.upload(tempOutput, { destination: outputStoragePath });
+
+    // Finish
+    await progressRef.update({
+      status: 'done',
+      progress: 100,
+      outputPath: outputStoragePath,
+      finishedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-  });
 
-  req.pipe(busboy);
+    fs.unlinkSync(tempInput);
+    fs.unlinkSync(tempOutput);
+  } catch (err: any) {
+    console.error('Error in process:', err);
+    await progressRef.set({ status: 'error', error: err.message });
+  }
 });

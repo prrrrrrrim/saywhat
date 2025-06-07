@@ -59,7 +59,6 @@ class _FileConverterPageState extends State<FileConverterPage> {
   }
 
   Future<void> _startConversion() async {
-    // Ensure file is selected before continuing
     final isFileSelected =
         kIsWeb
             ? _webFileBytes != null && _webFileName != null
@@ -74,9 +73,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
 
     // Get the current authenticated user
     final currentUser = FirebaseAuth.instance.currentUser;
-
     if (currentUser == null) {
-      // Handle user not authenticated
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('User not authenticated')));
@@ -88,27 +85,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
         kIsWeb ? _webFileName! : _selectedFile!.path.split('/').last;
 
     try {
-      // Prepare the API request (you can still send the file to backend when ready)
-      final uri = Uri.parse(
-        'https://convertmp4tomp3-949354399842.us-central1.run.app/',
-      );
-      final request = http.MultipartRequest('POST', uri);
-
-      if (kIsWeb) {
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            _webFileBytes!,
-            filename: _webFileName!,
-          ),
-        );
-      } else {
-        request.files.add(
-          await http.MultipartFile.fromPath('file', _selectedFile!.path),
-        );
-      }
-
-      // Upload the file to Firebase Storage (if needed, or save metadata)
+      // Upload the file to Firebase Storage (this will trigger your Cloud Function)
       final storageRef = FirebaseStorage.instance.ref().child(
         'uploads/$userId/$fileName',
       );
@@ -123,74 +100,34 @@ class _FileConverterPageState extends State<FileConverterPage> {
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
 
-      // Save metadata to Firestore
-      await FirebaseFirestore.instance.collection("converted_files").add({
-        'fileName': fileName,
-        'downloadUrl': downloadUrl,
-        'userId': userId,
-        'uploadedAt': Timestamp.now(),
-        'status': 'waiting',
-      });
+      // Create Firestore progress tracker document (used by QueuePage)
+      await FirebaseFirestore.instance
+          .collection("conversions")
+          .doc(fileName) // Match doc ID with filename
+          .set({
+            'fileName': fileName,
+            'userId': userId,
+            'status': 'waiting',
+            'progress': 0,
+            'uploadedAt': Timestamp.now(),
+            'downloadUrl': downloadUrl,
+          });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File uploaded and queued')),
+        const SnackBar(content: Text('File uploaded and conversion started')),
+      );
+
+      // Navigate to progress page
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => QueuePage(fileName: fileName)),
       );
     } catch (e) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
     }
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => QueuePage()),
-    );
   }
-  /*ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Uploading and converting...')),
-    );
-
-    try {
-      final response = await request.send();
-
-      if (response.statusCode == 200) {
-        final bytes = await response.stream.toBytes();
-
-        if (kIsWeb) {
-          final blob = html.Blob([bytes]);
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          final anchor = html.AnchorElement(href: url)
-            ..setAttribute("download", _webFileName!.replaceAll('.mp4', '.mp3'))
-            ..click();
-          html.Url.revokeObjectUrl(url);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Download started!')),
-          );
-        } else {
-          final directory = await getApplicationDocumentsDirectory();
-          final fileName =
-              path.basename(_selectedFile!.path).replaceAll('.mp4', '.mp3');
-          final filePath = path.join(directory.path, fileName);
-          final file = File(filePath);
-          await file.writeAsBytes(bytes);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Downloaded: $fileName')),
-          );
-
-          final player = AudioPlayer();
-          await player.play(DeviceFileSource(filePath));
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Conversion failed: ${response.statusCode}')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }*/
 
   @override
   Widget build(BuildContext context) {
