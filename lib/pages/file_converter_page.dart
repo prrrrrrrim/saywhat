@@ -1,8 +1,18 @@
 import 'dart:io';
-
-import 'package:dotted_border/dotted_border.dart';
-import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:dotted_border/dotted_border.dart';
+
+/// Web-only import (ignore if not on web)
+/// Add this line ONLY when targeting web
+/// (wrap with kIsWeb checks to avoid crashing on mobile)
+import 'dart:html' as html;
 
 class FileConverterPage extends StatefulWidget {
   const FileConverterPage({super.key});
@@ -13,31 +23,123 @@ class FileConverterPage extends StatefulWidget {
 
 class _FileConverterPageState extends State<FileConverterPage> {
   File? _selectedFile;
+  Uint8List? _webFileBytes;
+  String? _webFileName;
 
   void _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.any);
-    if (result != null && result.files.single.path != null) {
-      setState(() {
-        _selectedFile = File(result.files.single.path!);
-      });
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp4'],
+    );
+
+    if (result != null) {
+      if (kIsWeb) {
+        final bytes = result.files.single.bytes;
+        final name = result.files.single.name;
+
+        if (bytes != null) {
+          setState(() {
+            _webFileBytes = bytes;
+            _webFileName = name;
+          });
+        }
+      } else {
+        final file = File(result.files.single.path!);
+        setState(() {
+          _selectedFile = file;
+        });
+      }
     }
   }
 
-  void _startConversion() {
-    // TODO: Add actual conversion logic
-    if (_selectedFile != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Starting conversion for ${_selectedFile!.path.split('/').last}')),
-      );
-    } else {
+  Future<void> _startConversion() async {
+    final isFileSelected = kIsWeb
+        ? _webFileBytes != null && _webFileName != null
+        : _selectedFile != null;
+
+    if (!isFileSelected) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please upload a file first')),
+      );
+      return;
+    }
+
+    final uri = Uri.parse(
+      'https://convertmp4tomp3-949354399842.us-central1.run.app/',
+    );
+    final request = http.MultipartRequest('POST', uri);
+
+    if (kIsWeb) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          _webFileBytes!,
+          filename: _webFileName!,
+        ),
+      );
+    } else {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          _selectedFile!.path,
+        ),
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Uploading and converting...')),
+    );
+
+    try {
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        final bytes = await response.stream.toBytes();
+
+        if (kIsWeb) {
+          final blob = html.Blob([bytes]);
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: url)
+            ..setAttribute("download", _webFileName!.replaceAll('.mp4', '.mp3'))
+            ..click();
+          html.Url.revokeObjectUrl(url);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Download started!')),
+          );
+        } else {
+          final directory = await getApplicationDocumentsDirectory();
+          final fileName =
+              path.basename(_selectedFile!.path).replaceAll('.mp4', '.mp3');
+          final filePath = path.join(directory.path, fileName);
+          final file = File(filePath);
+          await file.writeAsBytes(bytes);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Downloaded: $fileName')),
+          );
+
+          final player = AudioPlayer();
+          await player.play(DeviceFileSource(filePath));
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Conversion failed: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final fileName = kIsWeb
+        ? (_webFileName ?? 'No file selected')
+        : (_selectedFile?.path.split('/').last ?? 'No file selected');
+
     return Scaffold(
       backgroundColor: const Color(0xFF0E241C),
       appBar: AppBar(
@@ -68,7 +170,8 @@ class _FileConverterPageState extends State<FileConverterPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -90,19 +193,30 @@ class _FileConverterPageState extends State<FileConverterPage> {
                 child: Container(
                   width: double.infinity,
                   alignment: Alignment.center,
-                  child: _selectedFile == null
+                  child: (kIsWeb && _webFileBytes == null) ||
+                          (!kIsWeb && _selectedFile == null)
                       ? const Text(
                           'No file selected',
-                          style: TextStyle(color: Colors.white60, fontSize: 16),
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 16,
+                          ),
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.insert_drive_file, size: 64, color: Colors.white),
+                            const Icon(
+                              Icons.insert_drive_file,
+                              size: 64,
+                              color: Colors.white,
+                            ),
                             const SizedBox(height: 12),
                             Text(
-                              _selectedFile!.path.split('/').last,
-                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                              fileName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -116,7 +230,8 @@ class _FileConverterPageState extends State<FileConverterPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE8DFF9),
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),

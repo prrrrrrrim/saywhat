@@ -9,12 +9,19 @@
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
 
-
+import * as functions from "firebase-functions";
+import ffmpeg from "fluent-ffmpeg";
+import * as ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
+import * as os from "os";
+import * as path from "path";
+import * as fs from "fs";
+import Busboy from "busboy";
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import OpenAI from "openai";
 import { TranslationServiceClient } from "@google-cloud/translate"; // Google Cloud Translation Client
+
 
 admin.initializeApp();
 
@@ -94,3 +101,90 @@ export const summarize = onCall(async (request) => {
   }
 });
 
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
+export const convertMp4ToMp3 = functions.https.onRequest((req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).send("Method Not Allowed");
+    return;
+  }
+
+  const busboy = Busboy({ headers: req.headers });
+  const tmpdir = os.tmpdir();
+
+  let uploadPath = "";
+  let outputPath = "";
+  let cleanupFiles: string[] = [];
+
+  busboy.on("file", (fieldname, file, info) => {
+    const { filename } = info;
+    const ext = path.extname(filename);
+    if (ext !== ".mp4") {
+      res.status(400).send("Only .mp4 files are allowed.");
+      file.resume(); // Discard the stream
+      return;
+    }
+
+    uploadPath = path.join(tmpdir, filename);
+    outputPath = uploadPath.replace(".mp4", ".mp3");
+    cleanupFiles = [uploadPath, outputPath];
+
+    const writeStream = fs.createWriteStream(uploadPath);
+
+    writeStream.on("error", (err) => {
+      console.error("File write error:", err);
+      res.status(500).send("Failed to write file");
+      cleanupFiles.forEach(file => {
+        try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
+      });
+    });
+
+    file.pipe(writeStream);
+
+    writeStream.on("finish", () => {
+      ffmpeg(uploadPath)
+        .format("mp3")
+        .output(outputPath)
+        .on("end", () => {
+          const outputFilename = path.basename(filename, ".mp4") + ".mp3";
+          res.setHeader("Content-Type", "audio/mpeg");
+          res.setHeader("Content-Disposition", `attachment; filename="${outputFilename}"`);
+          
+          const readStream = fs.createReadStream(outputPath);
+          readStream.pipe(res);
+
+          readStream.on("close", () => {
+            cleanupFiles.forEach(file => {
+              try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
+            });
+          });
+
+          readStream.on("error", (err) => {
+            console.error("File read error:", err);
+            res.status(500).send("Failed to read converted file");
+            cleanupFiles.forEach(file => {
+              try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
+            });
+          });
+        })
+        .on("error", (err) => {
+          console.error("FFmpeg error:", err);
+          res.status(500).send("Conversion failed");
+          cleanupFiles.forEach(file => {
+            try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
+          });
+        })
+        .run();
+    });
+  });
+
+  busboy.on("error", (err) => {
+    console.error("Busboy error:", err);
+    res.status(500).send("File upload error");
+    cleanupFiles.forEach(file => {
+      try { fs.unlinkSync(file); } catch (e) { console.error("Cleanup error:", e); }
+    });
+  });
+
+  req.pipe(busboy);
+});
