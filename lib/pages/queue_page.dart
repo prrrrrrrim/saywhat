@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:saywhat_app/pages/home.dart';
+
 
 class QueuePage extends StatelessWidget {
   const QueuePage({super.key});
@@ -31,11 +33,33 @@ class QueuePage extends StatelessWidget {
         title: const Text("Queue"),
         backgroundColor: const Color(0xFFECEFDA),
         foregroundColor: Colors.black,
-        leading: const BackButton(),
+        leading: IconButton(
+          icon: const Icon(Icons.home, color: Colors.black),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                transitionDuration: const Duration(milliseconds: 500),
+                pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(-1.0, 0.0); // Slide from left
+                  const end = Offset.zero;
+                  final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+                  final offsetAnimation = animation.drive(tween);
+
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
+              ),
+            );
+          },
+        ),
         actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16.0),
-            child: Icon(Icons.home),
+          Tooltip(
+          message: 'The queue page lets you track the progress of your current tasks.',
+          child: Icon(Icons.info_outline,color: Colors.black, ),
           ),
         ],
       ),
@@ -61,7 +85,8 @@ class QueuePage extends StatelessWidget {
             itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data() as Map<String, dynamic>;
-              final fileName = doc.id;
+              final rawFileName = doc.id;
+              final fileName = rawFileName.replaceAll(RegExp(r'\.mp4$', caseSensitive: false), '.mp3');
               final progress = (data['progress'] ?? 0).toDouble();
               final status = data['status'] ?? 'pending';
               final outputPath = data['outputPath'];

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart'; // Import Cloud Functions package
+import 'package:saywhat_app/pages/home.dart';
 // import 'package:firebase_auth/firebase_auth.dart';
 
 class TranslatePage extends StatefulWidget {
@@ -62,9 +63,36 @@ class _TranslatePageState extends State<TranslatePage> {
         leading: IconButton(
           icon: const Icon(Icons.home, color: Colors.black),
           onPressed: () {
-            Navigator.pop(context); // Go back to home
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                transitionDuration: const Duration(milliseconds: 500),
+                pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(-1.0, 0.0); // Slide from left
+                  const end = Offset.zero;
+                  final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+                  final offsetAnimation = animation.drive(tween);
+
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
+              ),
+            );
           },
         ),
+        actions: [
+        Tooltip(
+          message: 'The translate function lets you translate into the language you want',
+          child: IconButton(
+            icon: const Icon(Icons.info_outline),
+            color: Colors.black,
+            onPressed: () {},
+          ),
+        ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

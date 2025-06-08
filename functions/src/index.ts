@@ -15,13 +15,14 @@ import ffmpegStatic from 'ffmpeg-static';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-
-
+import FormData from 'form-data';
+import axios from 'axios';
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import OpenAI from "openai";
 import { TranslationServiceClient } from "@google-cloud/translate"; // Google Cloud Translation Client
 import { onObjectFinalized } from 'firebase-functions/storage';
+import mime from 'mime-types';
 
 
 admin.initializeApp();
@@ -181,3 +182,111 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
     await progressRef.set({ status: 'error', error: err.message });
   }
 });
+
+
+export const transcribeWhisperOnUpload = onObjectFinalized(
+  { region: 'us-west1' },
+  async (event) => {
+    const file = event.data;
+    const filePath = file.name;
+
+    if (!filePath || !filePath.endsWith('.mp3')) {
+      console.log('Skipped non-MP3 file:', filePath);
+      return;
+    }
+
+    const pathParts = filePath.split('/');
+    const userId = pathParts[1]; // Assuming `uploads/{userId}/{fileName}.mp3`
+    const fileName = path.basename(filePath);
+
+    const docRef = admin
+      .firestore()
+      .collection('users')
+      .doc(userId)
+      .collection('transcriptions')
+      .doc(fileName);
+
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      console.warn(`No Firestore doc found for: ${filePath}`);
+      return;
+    }
+
+    const data = docSnap.data()!;
+    const fromLanguage = data.fromLanguage || 'English';
+    const toLanguage = data.toLanguage || 'English';
+    const includeSummary = data.summary || false;
+
+    // Set status to "processing"
+    await docRef.update({ status: 'processing', progress: 10 });
+
+    const bucket = admin.storage().bucket(file.bucket);
+    const tempFilePath = path.join(os.tmpdir(), fileName);
+    await bucket.file(filePath).download({ destination: tempFilePath });
+
+    const fileStream = fs.createReadStream(tempFilePath);
+    const formData = new FormData();
+    formData.append('file', fileStream, {
+      filename: fileName,
+      contentType: mime.lookup(fileName) || 'audio/mpeg',
+    });
+    formData.append('model', 'whisper-1');
+    if (fromLanguage) {
+      formData.append('language', LANGUAGE_CODE_MAP[fromLanguage] || 'en');
+    }
+
+    try {
+      const whisperResponse = await axios.post(
+        'https://api.openai.com/v1/audio/transcriptions',
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            Authorization: `Bearer ${openai.apiKey}`,
+          },
+        }
+      );
+
+      const transcript = whisperResponse.data.text;
+      await docRef.update({ transcript, progress: 60 });
+
+      let translatedText = transcript;
+      if (fromLanguage !== toLanguage) {
+        const [translation] = await new TranslationServiceClient().translateText({
+          parent: `projects/${process.env.GCLOUD_PROJECT}/locations/global`,
+          contents: [transcript],
+          mimeType: 'text/plain',
+          sourceLanguageCode: LANGUAGE_CODE_MAP[fromLanguage],
+          targetLanguageCode: LANGUAGE_CODE_MAP[toLanguage],
+        });
+
+        translatedText = translation.translations?.[0]?.translatedText || transcript;
+        await docRef.update({ translation: translatedText, progress: 80 });
+      }
+
+      if (includeSummary) {
+        const summaryChat = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: `Summarize this ${toLanguage || 'text'}.` },
+            { role: 'user', content: translatedText },
+          ],
+        });
+
+        const summary = summaryChat.choices[0].message?.content;
+        await docRef.update({ summary, progress: 95 });
+      }
+
+      await docRef.update({
+        status: 'done',
+        progress: 100,
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      fs.unlinkSync(tempFilePath);
+    } catch (err: any) {
+      console.error('Transcription failed:', err.message);
+      await docRef.update({ status: 'error', error: err.message });
+    }
+  }
+);

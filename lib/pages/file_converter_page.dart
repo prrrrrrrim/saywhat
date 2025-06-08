@@ -11,6 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:saywhat_app/pages/home.dart';
 
 /// Web-only import (ignore if not on web)
 /// Add this line ONLY when targeting web
@@ -58,7 +59,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
     }
   }
 
-  Future<void> _startConversion() async {
+  Future<bool> _startConversion() async {
   final isFileSelected = kIsWeb
       ? _webFileBytes != null && _webFileName != null
       : _selectedFile != null;
@@ -67,7 +68,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Please upload a file first')),
     );
-    return;
+    return false;
   }
 
   final currentUser = FirebaseAuth.instance.currentUser;
@@ -75,7 +76,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('User not authenticated')),
     );
-    return;
+    return false;
   }
 
   final userId = currentUser.uid;
@@ -118,15 +119,12 @@ class _FileConverterPageState extends State<FileConverterPage> {
       const SnackBar(content: Text('File uploaded and conversion started')),
     );
 
-    // Navigate to QueuePage, without passing key
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const QueuePage()),
-    );
+    return true;
   } catch (e) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Upload failed: $e')),
     );
+    return false;
   }
   }
 
@@ -145,7 +143,24 @@ class _FileConverterPageState extends State<FileConverterPage> {
         leading: IconButton(
           icon: const Icon(Icons.home),
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                transitionDuration: const Duration(milliseconds: 500),
+                pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(-1.0, 0.0); // Slide from left
+                  const end = Offset.zero;
+                  final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+                  final offsetAnimation = animation.drive(tween);
+
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
+              ),
+            );
           },
         ),
         title: const Text(
@@ -157,6 +172,16 @@ class _FileConverterPageState extends State<FileConverterPage> {
           ),
         ),
         centerTitle: false,
+        actions: [
+        Tooltip(
+          message: 'The converter function helps you convert MP4 or WAV files into MP3 format',
+          child: IconButton(
+            icon: const Icon(Icons.info_outline),
+            color: Colors.black,
+            onPressed: () {},
+          ),
+        ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -226,7 +251,60 @@ class _FileConverterPageState extends State<FileConverterPage> {
             ),
             const SizedBox(height: 40),
             ElevatedButton(
-              onPressed: _startConversion,
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Confirm Conversion'),
+                    content: const Text('Are you sure you want to start the file converter?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(), // Cancel
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () async{
+                          Navigator.of(ctx).pop(); // Close confirmation dialog
+
+                          // Show loading dialog
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+
+                          bool success = await _startConversion();
+                          Navigator.of(context).pop(); // Close loading spinner
+
+                          if (success) {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration: const Duration(milliseconds: 500),
+                                pageBuilder: (context, animation, secondaryAnimation) => const QueuePage(),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  const begin = Offset(1.0, 0.0); // Slide in from right
+                                  const end = Offset.zero;
+                                  final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+                                  final offsetAnimation = animation.drive(tween);
+
+                                  return SlideTransition(
+                                    position: offsetAnimation,
+                                    child: child,
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Confirm'),
+                      ),
+                    ],
+                  ),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE8DFF9),
                 foregroundColor: Colors.black,
