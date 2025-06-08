@@ -266,12 +266,16 @@ class _FileConverterPageState extends State<FileConverterPage> {
                         onPressed: () async{
                           Navigator.of(ctx).pop(); // Close confirmation dialog
 
-                          // Show loading dialog
+                         // Show loading dialog with GIF
                           showDialog(
                             context: context,
                             barrierDismissible: false,
-                            builder: (context) => const Center(
-                              child: CircularProgressIndicator(),
+                            builder: (context) => Center(
+                              child: Image.asset(
+                                'assets/panda_walk_load.gif',
+                                width: 120,
+                                height: 120,
+                              ),
                             ),
                           );
 

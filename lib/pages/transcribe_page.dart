@@ -28,7 +28,7 @@ class _TranscribePageState extends State<TranscribePage> {
   void _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['mp4', 'mp3'],
+      allowedExtensions: ['mp3'],
     );
 
     if (result != null) {
@@ -273,13 +273,17 @@ class _TranscribePageState extends State<TranscribePage> {
                               onPressed: () async {
                                 Navigator.of(ctx).pop();
 
+                                // Show loading dialog with GIF
                                 showDialog(
                                   context: context,
                                   barrierDismissible: false,
-                                  builder:
-                                      (context) => const Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
+                                  builder: (context) => Center(
+                                    child: Image.asset(
+                                      'assets/panda_walk_load.gif',
+                                      width: 120,
+                                      height: 120,
+                                    ),
+                                  ),
                                 );
 
                                 bool success = await _startTranscription();

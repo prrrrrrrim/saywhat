@@ -1,6 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:saywhat_app/pages/auth_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HistoryDrawer extends StatelessWidget {
   const HistoryDrawer({super.key});
@@ -45,14 +48,15 @@ class HistoryDrawer extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: user != null
-                ? _buildHistoryList() // Show user history
-                : const Center(
-                    child: Text(
-                      'Please log in to view history.',
-                      style: TextStyle(color: Colors.white70),
+            child:
+                user != null
+                    ? _buildHistoryList(user.uid)
+                    : const Center(
+                      child: Text(
+                        'Please log in to view history.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
                     ),
-                  ),
           ),
           const Divider(color: Colors.white24),
           _buildLoginOrLogoutButton(context, user),
@@ -62,23 +66,66 @@ class HistoryDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryList() {
-    // You can replace this with your actual list of history
-    final dummyHistory = [
-      'Converted file: notes.mp4',
-      'Translated text: hello world',
-      'Transcribed: interview.wav',
-    ];
+  Widget _buildHistoryList(String userId) {
+    final historyStream =
+        FirebaseFirestore.instance
+            .collection("users")
+            .doc(userId)
+            .collection("transcriptions")
+            .snapshots();
 
-    return ListView.builder(
-      itemCount: dummyHistory.length,
-      itemBuilder: (context, index) {
-        return ListTile(
-          leading: const Icon(Icons.history, color: Colors.white),
-          title: Text(
-            dummyHistory[index],
-            style: const TextStyle(color: Colors.white),
-          ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: historyStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Text(
+              'No history found.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+
+        final docs = snapshot.data!.docs;
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final doc = docs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final fileName = doc.id;
+            final txtPath = data['txtPath'] as String?;
+
+            return ListTile(
+              leading: const Icon(Icons.history, color: Colors.white),
+              title: Text(
+                fileName,
+                style: const TextStyle(color: Colors.white),
+              ),
+              onTap: () async {
+                if (txtPath != null) {
+                  final storageRef = FirebaseStorage.instance.ref().child(
+                    txtPath,
+                  );
+                  final url = await storageRef.getDownloadURL();
+                  if (await canLaunchUrl(Uri.parse(url))) {
+                    await launchUrl(
+                      Uri.parse(url),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Cannot launch file")),
+                    );
+                  }
+                }
+              },
+            );
+          },
         );
       },
     );

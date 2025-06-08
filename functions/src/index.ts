@@ -23,10 +23,10 @@ import OpenAI from "openai";
 import { TranslationServiceClient } from "@google-cloud/translate"; // Google Cloud Translation Client
 import { onObjectFinalized } from 'firebase-functions/storage';
 import mime from 'mime-types';
-
+//import { PDFDocument, PDFFont } from 'pdf-lib';
+//import fontkit from 'fontkit';
 
 admin.initializeApp();
-
 const LANGUAGE_CODE_MAP: Record<string, string> = {
   English: "en",
   Thai: "th",
@@ -114,9 +114,9 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
   const filePath = object.name;
   const contentType = object.contentType;
   if (!filePath || !filePath.endsWith('.mp4')) {
-  console.log('Not an MP4 file. Skipping...');
-  return;
-}
+    console.log('Not an MP4 file. Skipping...');
+    return;
+  }
 
   // Log contentType to debug
   console.log('File contentType:', contentType);
@@ -134,7 +134,7 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
 
   try {
     const bucket = admin.storage().bucket(object.bucket);
-    
+
     // Download the video file
     await progressRef.set({ status: 'downloading', progress: 10 });
     await bucket.file(filePath).download({ destination: tempInput });
@@ -189,18 +189,16 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
   async (event) => {
     const file = event.data;
     const filePath = file.name;
-
     if (!filePath || !filePath.endsWith('.mp3')) {
       console.log('Skipped non-MP3 file:', filePath);
       return;
     }
 
     const pathParts = filePath.split('/');
-    const userId = pathParts[1]; // Assuming `uploads/{userId}/{fileName}.mp3`
+    const userId = pathParts[1]; // uploads/{userId}/{filename}.mp3
     const fileName = path.basename(filePath);
 
-    const docRef = admin
-      .firestore()
+    const docRef = admin.firestore()
       .collection('users')
       .doc(userId)
       .collection('transcriptions')
@@ -217,7 +215,6 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
     const toLanguage = data.toLanguage || 'English';
     const includeSummary = data.summary || false;
 
-    // Set status to "processing"
     await docRef.update({ status: 'processing', progress: 10 });
 
     const bucket = admin.storage().bucket(file.bucket);
@@ -249,7 +246,6 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
 
       const transcript = whisperResponse.data.text;
       await docRef.update({ transcript, progress: 60 });
-
       let translatedText = transcript;
       if (fromLanguage !== toLanguage) {
         const [translation] = await new TranslationServiceClient().translateText({
@@ -268,7 +264,7 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         const summaryChat = await openai.chat.completions.create({
           model: 'gpt-3.5-turbo',
           messages: [
-            { role: 'system', content: `Summarize this ${toLanguage || 'text'}.` },
+            { role: 'system', content: `Summarize this ${toLanguage}.` },
             { role: 'user', content: translatedText },
           ],
         });
@@ -277,12 +273,42 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         await docRef.update({ summary, progress: 95 });
       }
 
+      // Combine the content into plain text
+      const content = [
+        'Transcription:',
+        transcript,
+        '',
+        'Translation:',
+        translatedText,
+        '',
+        'Summary:',
+         includeSummary ? data.summary : '',
+      ].join('\n');
+
+      // Save to a local .txt file
+      const txtFileName = fileName.replace('.mp3', '.txt');
+      const txtTempPath = path.join(os.tmpdir(), txtFileName);
+      fs.writeFileSync(txtTempPath, content, 'utf8');
+
+      // Upload to Cloud Storage
+      const txtStoragePath = `texts/${userId}/${txtFileName}`;
+      await bucket.upload(txtTempPath, {
+        destination: txtStoragePath,
+        metadata: {
+          contentType: 'text/plain; charset=utf-8',
+        },
+      });
+
+      // Update Firestore
       await docRef.update({
+        txtPath: txtStoragePath,
         status: 'done',
         progress: 100,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Cleanup
+      fs.unlinkSync(txtTempPath);
       fs.unlinkSync(tempFilePath);
     } catch (err: any) {
       console.error('Transcription failed:', err.message);
@@ -290,3 +316,4 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
     }
   }
 );
+

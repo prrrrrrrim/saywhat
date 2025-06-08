@@ -1,10 +1,9 @@
+import 'package:async/async.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:saywhat_app/pages/home.dart';
-
 
 class QueuePage extends StatelessWidget {
   const QueuePage({super.key});
@@ -21,10 +20,17 @@ class QueuePage extends StatelessWidget {
 
     final userId = currentUser.uid;
 
-    final conversionStream = FirebaseFirestore.instance
+    final conversionsStream = FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
         .collection('conversions')
+        .orderBy('uploadedAt', descending: true)
+        .snapshots();
+
+    final transcriptionsStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('transcriptions')
         .orderBy('uploadedAt', descending: true)
         .snapshots();
 
@@ -36,36 +42,20 @@ class QueuePage extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.home, color: Colors.black),
           onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                transitionDuration: const Duration(milliseconds: 500),
-                pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(-1.0, 0.0); // Slide from left
-                  const end = Offset.zero;
-                  final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
-                  final offsetAnimation = animation.drive(tween);
-
-                  return SlideTransition(
-                    position: offsetAnimation,
-                    child: child,
-                  );
-                },
-              ),
-            );
+            Navigator.pop(context);
           },
         ),
         actions: const [
           Tooltip(
-          message: 'The queue page lets you track the progress of your current tasks.',
-          child: Icon(Icons.info_outline,color: Colors.black, ),
+            message:
+                'The queue page lets you track the progress of your current tasks.',
+            child: Icon(Icons.info_outline, color: Colors.black),
           ),
         ],
       ),
       backgroundColor: const Color(0xFF08251E),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: conversionStream,
+      body: StreamBuilder<List<QuerySnapshot>>(
+        stream: StreamZip([conversionsStream, transcriptionsStream]),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -74,26 +64,40 @@ class QueuePage extends StatelessWidget {
             return const Center(child: Text("Something went wrong"));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          final conversionDocs = snapshot.data?[0].docs ?? [];
+          final transcriptionDocs = snapshot.data?[1].docs ?? [];
 
-          if (docs.isEmpty) {
+          final allDocs = [
+            ...conversionDocs.map((doc) => {'type': 'conversion', 'doc': doc}),
+            ...transcriptionDocs.map((doc) => {'type': 'transcription', 'doc': doc}),
+          ];
+
+          allDocs.sort((a, b) {
+            final timeA = (a['doc'] as QueryDocumentSnapshot)['uploadedAt']?.toDate();
+            final timeB = (b['doc'] as QueryDocumentSnapshot)['uploadedAt']?.toDate();
+            return timeB.compareTo(timeA);
+          });
+
+          if (allDocs.isEmpty) {
             return const Center(child: Text("No files in queue"));
           }
 
           return ListView.builder(
-            itemCount: docs.length,
+            itemCount: allDocs.length,
             itemBuilder: (context, index) {
-              final doc = docs[index];
+              final entry = allDocs[index];
+              final doc = entry['doc'] as QueryDocumentSnapshot;
+              final type = entry['type'] as String;
               final data = doc.data() as Map<String, dynamic>;
               final rawFileName = doc.id;
               final fileName = rawFileName.replaceAll(RegExp(r'\.mp4$', caseSensitive: false), '.mp3');
               final progress = (data['progress'] ?? 0).toDouble();
               final status = data['status'] ?? 'pending';
-              final outputPath = data['outputPath'];
+              final outputPath = data['outputPath'] ?? data['txtPath']; // transcriptions might have pdfPath
 
               return ListTile(
-                leading: const Icon(
-                  Icons.hourglass_bottom,
+                leading: Icon(
+                  type == 'conversion' ? Icons.music_note : Icons.text_snippet,
                   color: Colors.white,
                 ),
                 title: Text(
@@ -118,41 +122,30 @@ class QueuePage extends StatelessWidget {
                             : LinearProgressIndicator(
                                 value: progress / 100,
                                 backgroundColor: Colors.grey[700],
-                                valueColor:
-                                    const AlwaysStoppedAnimation<Color>(
+                                valueColor: const AlwaysStoppedAnimation<Color>(
                                   Colors.purple,
                                 ),
                               ),
-                trailing: status == 'done'
+                trailing: status == 'done' && outputPath != null
                     ? ElevatedButton(
                         onPressed: () async {
-                          if (outputPath != null) {
-                            // Get the download URL from Firebase Storage
-                            final storageRef =
-                                FirebaseStorage.instance.ref().child(outputPath);
-
-                            try {
-                              final url = await storageRef.getDownloadURL();
-                              if (await canLaunchUrl(Uri.parse(url))) {
-                                await launchUrl(
-                                  Uri.parse(url),
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Download URL not available"),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              // Handle error (e.g., if the file doesn't exist in Firebase Storage)
+                          try {
+                            final storageRef = FirebaseStorage.instance.ref().child(outputPath);
+                            final url = await storageRef.getDownloadURL();
+                            if (await canLaunchUrl(Uri.parse(url))) {
+                              await launchUrl(
+                                Uri.parse(url),
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Failed to get download URL"),
-                                ),
+                                const SnackBar(content: Text("Cannot launch file")),
                               );
                             }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Failed to get download URL")),
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(
