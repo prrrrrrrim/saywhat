@@ -79,7 +79,7 @@ class QueuePage extends StatelessWidget {
                   type == 'conversion' ? data['outputPath'] : data['txtPath'];
               final fileName = type == 'conversion'
                   ? id.replaceAll(RegExp(r'\.mp4$', caseSensitive: false), '.mp3')
-                  : id.replaceAll(RegExp(r'\.mp4$', caseSensitive: false), '.txt');
+                  : id.replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '.txt');
 
               return ListTile(
                 leading: Icon(
