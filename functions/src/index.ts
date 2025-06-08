@@ -23,6 +23,7 @@ import OpenAI from "openai";
 import { TranslationServiceClient } from "@google-cloud/translate"; // Google Cloud Translation Client
 import { onObjectFinalized } from 'firebase-functions/storage';
 import mime from 'mime-types';
+import * as functions from 'firebase-functions/v2'; // Correct import
 //import { PDFDocument, PDFFont } from 'pdf-lib';
 //import fontkit from 'fontkit';
 
@@ -317,3 +318,63 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
   }
 );
 
+
+export const trackProcessQueue = functions.firestore
+  .onDocumentWritten('users/{userId}/conversions/{conversionId}', async (event) => {
+    const { userId, conversionId } = event.params;
+
+    if (!event.data?.after?.exists) {
+      console.log(`Document at users/${userId}/conversions/${conversionId} was deleted.`);
+      return null;
+    }
+
+    const data = event.data.after.data();
+
+    if (data) {
+      await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('processQueue')
+        .doc(conversionId)
+        .set({
+          type: 'conversion',
+          status: data.status || 'queued',
+          progress: data.progress || 0,
+          uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
+          conversionId: conversionId,
+          outputPath: data.outputPath || null,
+        }, { merge: true });
+    }
+
+    return null;
+  });
+
+export const trackTranscriptionQueue = functions.firestore
+  .onDocumentWritten('users/{userId}/transcriptions/{transcriptionId}', async (event) => {
+    const { userId, transcriptionId } = event.params;
+
+    if (!event.data?.after?.exists) {
+      console.log(`Document at users/${userId}/transcriptions/${transcriptionId} was deleted.`);
+      return null;
+    }
+
+    const data = event.data.after.data();
+
+    if (data) {
+      await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('processQueue')
+        .doc(transcriptionId)
+        .set({
+          type: 'transcription',
+          status: data.status || 'queued',
+          progress: data.progress || 0,
+          uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
+          transcriptionId: transcriptionId,
+          txtPath: data.txtPath || null, // ✅ Add this line
+        }, { merge: true });
+    }
+
+    return null;
+  });
