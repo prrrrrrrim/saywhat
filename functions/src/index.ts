@@ -359,6 +359,19 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
 
 
 
+// Define a type for Firestore document update
+interface ProcessQueueData {
+  type: string;
+  status: string;
+  progress: number;
+  uploadedAt: admin.firestore.Timestamp;
+  conversionId?: string;
+  transcriptionId?: string;
+  outputPath?: string | null;  // Output path for conversions (can be null)
+  txtPath?: string | null;      // Text path for transcriptions (can be null)
+}
+
+// Track the process of conversions (e.g., MP4 to MP3)
 export const trackProcessQueue = functions.firestore
   .onDocumentWritten('users/{userId}/conversions/{conversionId}', async (event) => {
     const { userId, conversionId } = event.params;
@@ -371,37 +384,43 @@ export const trackProcessQueue = functions.firestore
     const data = event.data.after.data();
 
     if (data) {
-      // Step 1: First update for conversion (if progress was 10)
+      const progressUpdate = data.progress >= 10 ? data.progress : 10;
+      const updatedData: ProcessQueueData = {
+        type: 'conversion',
+        status: data.status || 'queued',
+        progress: progressUpdate,
+        uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
+        conversionId: conversionId,
+      };
+
+      // Handling the outputPath for MP4 to MP3 conversion (handling null case)
+      if (data.outputPath) {
+        updatedData.outputPath = data.outputPath;
+      } else {
+        updatedData.outputPath = null;  // Ensure outputPath is set to null if not available
+      }
+
+      // Step 1: First update for conversion process
+      if (progressUpdate < 100) {
+        updatedData.progress = Math.min(progressUpdate + 10, 100);
+        updatedData.status = 'processing';
+      } else {
+        updatedData.status = 'done';
+      }
+
+      // Update Firestore with the new progress, status, and outputPath
       await admin.firestore()
         .collection('users')
         .doc(userId)
         .collection('processQueue')
         .doc(conversionId)
-        .set({
-          type: 'conversion',
-          status: data.status || 'queued',
-          progress: data.progress >= 10 ? data.progress : 10, // Update to 10 if not done yet
-          uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
-          conversionId: conversionId,
-          outputPath: data.outputPath || null,
-        }, { merge: true });
-
-      // Step 2: Second update after a brief delay for more accurate progress (e.g., after transcribing)
-      if (data.progress < 100) {
-        await admin.firestore()
-          .collection('users')
-          .doc(userId)
-          .collection('processQueue')
-          .doc(conversionId)
-          .set({
-            progress: Math.min(data.progress + 10, 100), // Increase progress by 10 (but no higher than 100)
-          }, { merge: true });
-      }
+        .set(updatedData, { merge: true });
     }
 
     return null;
   });
 
+// Track the process of transcriptions
 export const trackTranscriptionQueue = functions.firestore
   .onDocumentWritten('users/{userId}/transcriptions/{transcriptionId}', async (event) => {
     const { userId, transcriptionId } = event.params;
@@ -414,32 +433,37 @@ export const trackTranscriptionQueue = functions.firestore
     const data = event.data.after.data();
 
     if (data) {
-      // Step 1: First update for transcription (if progress was 10)
+      const progressUpdate = data.progress >= 10 ? data.progress : 10;
+      const updatedData: ProcessQueueData = {
+        type: 'transcription',
+        status: data.status || 'queued',
+        progress: progressUpdate,
+        uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
+        transcriptionId: transcriptionId,
+      };
+
+      // Handling the txtPath for transcription process (handling null case)
+      if (data.txtPath) {
+        updatedData.txtPath = data.txtPath;
+      } else {
+        updatedData.txtPath = null;  // Ensure txtPath is set to null if not available
+      }
+
+      // Step 1: First update for transcription process
+      if (progressUpdate < 100) {
+        updatedData.progress = Math.min(progressUpdate + 10, 100);
+        updatedData.status = 'processing';
+      } else {
+        updatedData.status = 'done';
+      }
+
+      // Update Firestore with the new progress, status, and txtPath if available
       await admin.firestore()
         .collection('users')
         .doc(userId)
         .collection('processQueue')
         .doc(transcriptionId)
-        .set({
-          type: 'transcription',
-          status: data.status || 'queued',
-          progress: data.progress >= 10 ? data.progress : 10, // Update to 10 if not done yet
-          uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
-          transcriptionId: transcriptionId,
-          txtPath: data.txtPath || null,
-        }, { merge: true });
-
-      // Step 2: Second update after a brief delay for more accurate progress (e.g., after transcribing)
-      if (data.progress < 100) {
-        await admin.firestore()
-          .collection('users')
-          .doc(userId)
-          .collection('processQueue')
-          .doc(transcriptionId)
-          .set({
-            progress: Math.min(data.progress + 10, 100), // Increase progress by 10 (but no higher than 100)
-          }, { merge: true });
-      }
+        .set(updatedData, { merge: true });
     }
 
     return null;
