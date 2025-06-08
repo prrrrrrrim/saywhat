@@ -205,8 +205,19 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
       .collection('transcriptions')
       .doc(fileName);
 
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) {
+    // Wait for Firestore doc to appear (max 5s)
+    let docSnap: FirebaseFirestore.DocumentSnapshot | undefined = undefined;
+    for (let i = 0; i < 5; i++) {
+      const snap = await docRef.get();
+      if (snap.exists) {
+        docSnap = snap;
+        break;
+      }
+      console.warn(`Doc not found, retrying in 1s... (${i + 1}/5)`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    if (!docSnap || !docSnap.exists) {
       console.warn(`No Firestore doc found for: ${filePath}`);
       return;
     }
@@ -214,7 +225,7 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
     const data = docSnap.data()!;
     const fromLanguage = data.fromLanguage || 'English';
     const toLanguage = data.toLanguage || 'English';
-    const includeSummary = data.summary || false;
+    const includeSummary = data.summary === true;
 
     await docRef.update({ status: 'processing', progress: 10 });
 
@@ -247,6 +258,7 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
 
       const transcript = whisperResponse.data.text;
       await docRef.update({ transcript, progress: 60 });
+
       let translatedText = transcript;
       if (fromLanguage !== toLanguage) {
         const [translation] = await new TranslationServiceClient().translateText({
@@ -261,6 +273,7 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         await docRef.update({ translation: translatedText, progress: 80 });
       }
 
+      let summary = '';
       if (includeSummary) {
         const summaryChat = await openai.chat.completions.create({
           model: 'gpt-3.5-turbo',
@@ -270,11 +283,10 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
           ],
         });
 
-        const summary = summaryChat.choices[0].message?.content;
+        summary = summaryChat.choices[0].message?.content ?? '';
         await docRef.update({ summary, progress: 95 });
       }
 
-      // Combine the content into plain text
       const content = [
         'Transcription:',
         transcript,
@@ -283,15 +295,13 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         translatedText,
         '',
         'Summary:',
-         includeSummary ? data.summary : '',
+        includeSummary && summary ? summary : '',
       ].join('\n');
 
-      // Save to a local .txt file
       const txtFileName = fileName.replace('.mp3', '.txt');
       const txtTempPath = path.join(os.tmpdir(), txtFileName);
       fs.writeFileSync(txtTempPath, content, 'utf8');
 
-      // Upload to Cloud Storage
       const txtStoragePath = `texts/${userId}/${txtFileName}`;
       await bucket.upload(txtTempPath, {
         destination: txtStoragePath,
@@ -300,7 +310,6 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         },
       });
 
-      // Update Firestore
       await docRef.update({
         txtPath: txtStoragePath,
         status: 'done',
@@ -308,7 +317,6 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Cleanup
       fs.unlinkSync(txtTempPath);
       fs.unlinkSync(tempFilePath);
     } catch (err: any) {
@@ -317,6 +325,7 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
     }
   }
 );
+
 
 
 export const trackProcessQueue = functions.firestore
@@ -331,6 +340,7 @@ export const trackProcessQueue = functions.firestore
     const data = event.data.after.data();
 
     if (data) {
+      // Step 1: First update for conversion (if progress was 10)
       await admin.firestore()
         .collection('users')
         .doc(userId)
@@ -339,11 +349,23 @@ export const trackProcessQueue = functions.firestore
         .set({
           type: 'conversion',
           status: data.status || 'queued',
-          progress: data.progress || 0,
+          progress: data.progress >= 10 ? data.progress : 10, // Update to 10 if not done yet
           uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
           conversionId: conversionId,
           outputPath: data.outputPath || null,
         }, { merge: true });
+
+      // Step 2: Second update after a brief delay for more accurate progress (e.g., after transcribing)
+      if (data.progress < 100) {
+        await admin.firestore()
+          .collection('users')
+          .doc(userId)
+          .collection('processQueue')
+          .doc(conversionId)
+          .set({
+            progress: Math.min(data.progress + 10, 100), // Increase progress by 10 (but no higher than 100)
+          }, { merge: true });
+      }
     }
 
     return null;
@@ -361,6 +383,7 @@ export const trackTranscriptionQueue = functions.firestore
     const data = event.data.after.data();
 
     if (data) {
+      // Step 1: First update for transcription (if progress was 10)
       await admin.firestore()
         .collection('users')
         .doc(userId)
@@ -369,11 +392,23 @@ export const trackTranscriptionQueue = functions.firestore
         .set({
           type: 'transcription',
           status: data.status || 'queued',
-          progress: data.progress || 0,
+          progress: data.progress >= 10 ? data.progress : 10, // Update to 10 if not done yet
           uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
           transcriptionId: transcriptionId,
-          txtPath: data.txtPath || null, // ✅ Add this line
+          txtPath: data.txtPath || null,
         }, { merge: true });
+
+      // Step 2: Second update after a brief delay for more accurate progress (e.g., after transcribing)
+      if (data.progress < 100) {
+        await admin.firestore()
+          .collection('users')
+          .doc(userId)
+          .collection('processQueue')
+          .doc(transcriptionId)
+          .set({
+            progress: Math.min(data.progress + 10, 100), // Increase progress by 10 (but no higher than 100)
+          }, { merge: true });
+      }
     }
 
     return null;
