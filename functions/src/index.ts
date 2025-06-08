@@ -142,7 +142,7 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
 
     // Convert to MP3 with progress
     await new Promise<void>((resolve, reject) => {
-      ffmpeg(tempInput)
+      const ffmpegProcess = ffmpeg(tempInput)
         .output(tempOutput)
         .on('start', () => {
           console.log('FFmpeg started');
@@ -161,8 +161,38 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
           console.error('FFmpeg error:', err);
           await progressRef.update({ status: 'error', error: err.message });
           reject(err);
-        })
-        .run();
+        });
+
+      // Run FFmpeg and handle edge cases (like no progress event)
+      ffmpegProcess.run();
+
+      // Fallback for progress update if FFmpeg doesn't emit events
+      const interval = setInterval(async () => {
+        const currentProgressSnapshot = await progressRef.get();
+        const currentProgress = currentProgressSnapshot.data()?.progress || 10;
+        if (currentProgress < 100) {
+          console.log('Forcing progress update');
+          await progressRef.update({ progress: Math.min(currentProgress + 5, 100) });
+        }
+      }, 5000); // Update every 5 seconds
+
+      // Set a timeout to ensure progress doesn't get stuck forever
+      const timeout = setTimeout(() => {
+        ffmpegProcess.kill('SIGINT');
+        progressRef.update({ status: 'error', error: 'Timeout: FFmpeg processing took too long' });
+        reject(new Error('FFmpeg processing timeout'));
+      }, 300000); // Timeout after 5 minutes
+
+      // Clean up interval and timeout on successful end
+      ffmpegProcess.on('end', () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      });
+
+      ffmpegProcess.on('error', () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      });
     });
 
     // Upload to Storage
@@ -176,6 +206,7 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
       finishedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Clean up
     fs.unlinkSync(tempInput);
     fs.unlinkSync(tempOutput);
   } catch (err: any) {
