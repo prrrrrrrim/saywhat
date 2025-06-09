@@ -126,7 +126,7 @@ class QueuePage extends StatelessWidget {
                                 backgroundColor: Colors.grey[700],
                                 valueColor:
                                     const AlwaysStoppedAnimation<Color>(
-                                        Colors.purple),
+                                        Color(0xFFE8DEF8)),
                               ),
                 trailing: status == 'done' && previewPath != null
                     ? ElevatedButton(

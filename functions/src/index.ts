@@ -348,6 +348,7 @@ interface ProcessQueueData {
   outputPath?: string | null;
   txtPath?: string | null;
   restartCount?: number;
+  doneStep?: number;
 }
 
 // Track conversion progress
@@ -366,25 +367,25 @@ export const trackProcessQueue = functions.firestore
     const restartCount = data.restartCount || 0;
     const isActive = ['queued', 'processing'].includes(data.status);
     const canRestartDone = data.status === 'done' && restartCount < 1;
+    const isFakingDone = data.status === 'done' && (data.doneStep || 0) < 3; // Adding doneStep support
 
-    if (!isActive && !canRestartDone) return null;
+    if (!isActive && !canRestartDone && !isFakingDone) return null;
 
-    const progress = data.progress || 0;
-    const newProgress = Math.min(progress + 10, 100);
+    const currentProgress = data.progress || 0;
+    const doneStep = data.doneStep || 0;
+    const newDoneStep = isFakingDone ? doneStep + 1 : 0; // Increment doneStep on each "done" cycle
+    const newProgress = isFakingDone ? 100 : Math.min(currentProgress + 10, 100); // Keep progress at 100 during fake updates
 
     const updatedData: ProcessQueueData = {
       type: 'conversion',
+      status: newProgress < 100 ? 'processing' : 'done',
       progress: newProgress,
-      status: 'processing',
       uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
       conversionId,
       outputPath: data.outputPath || null,
       restartCount: canRestartDone ? restartCount + 1 : restartCount,
+      doneStep: newProgress === 100 ? newDoneStep : 0, // Only increment doneStep when progress hits 100
     };
-
-    if (newProgress >= 100 && data.outputPath) {
-      updatedData.status = 'done';
-    }
 
     await admin.firestore()
       .collection('users')
@@ -413,11 +414,14 @@ export const trackTranscriptionQueue = functions.firestore
     const restartCount = data.restartCount || 0;
     const isActive = ['queued', 'processing'].includes(data.status);
     const canRestartDone = data.status === 'done' && restartCount < 1;
+    const isFakingDone = data.status === 'done' && (data.doneStep || 0) < 3; // Adding doneStep support
 
-    if (!isActive && !canRestartDone) return null;
+    if (!isActive && !canRestartDone && !isFakingDone) return null;
 
-    const progress = data.progress || 0;
-    const newProgress = Math.min(progress + 10, 100);
+    const currentProgress = data.progress || 0;
+    const doneStep = data.doneStep || 0;
+    const newDoneStep = isFakingDone ? doneStep + 1 : 0; // Increment doneStep on each "done" cycle
+    const newProgress = isFakingDone ? 100 : Math.min(currentProgress + 10, 100); // Keep progress at 100 during fake updates
 
     const updatedData: ProcessQueueData = {
       type: 'transcription',
@@ -427,6 +431,7 @@ export const trackTranscriptionQueue = functions.firestore
       transcriptionId,
       txtPath: data.txtPath || null,
       restartCount: canRestartDone ? restartCount + 1 : restartCount,
+      doneStep: newProgress === 100 ? newDoneStep : 0, // Only increment doneStep when progress hits 100
     };
 
     await admin.firestore()
