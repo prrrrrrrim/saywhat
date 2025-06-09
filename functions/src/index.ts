@@ -77,33 +77,6 @@ export const translateText = onCall(async (request) => {
 
 const openai = new OpenAI({ apiKey: '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' });
 
-export const summarize = onCall(async (request) => {
-  const { text, targetLang, fromLang } = request.data;
-
-  try {
-    const chat = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: `You are a professional translator. Translate from ${fromLang} to ${targetLang}.`,
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
-    });
-
-    return { translation: chat.choices[0].message?.content };
-  } catch (error) {
-    if (error === 'insufficient_quota') {
-      throw new HttpsError("resource-exhausted", "API quota exceeded. Please check your plan or billing.");
-    }
-    throw new HttpsError("internal", "An unexpected error occurred.");
-  }
-});
-
 const db = admin.firestore();
 
 // Set ffmpeg binary path
@@ -359,19 +332,19 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
 
 
 
-// Define a type for Firestore document update
 interface ProcessQueueData {
   type: string;
   status: string;
   progress: number;
-  uploadedAt: admin.firestore.Timestamp;
+  uploadedAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
   conversionId?: string;
   transcriptionId?: string;
-  outputPath?: string | null;  // Output path for conversions (can be null)
-  txtPath?: string | null;      // Text path for transcriptions (can be null)
+  outputPath?: string | null;
+  txtPath?: string | null;
+  restartCount?: number;
 }
 
-// Track the process of conversions (e.g., MP4 to MP3)
+// Track conversion progress
 export const trackProcessQueue = functions.firestore
   .onDocumentWritten('users/{userId}/conversions/{conversionId}', async (event) => {
     const { userId, conversionId } = event.params;
@@ -382,45 +355,43 @@ export const trackProcessQueue = functions.firestore
     }
 
     const data = event.data.after.data();
+    if (!data) return null;
 
-    if (data) {
-      const progressUpdate = data.progress >= 10 ? data.progress : 10;
-      const updatedData: ProcessQueueData = {
-        type: 'conversion',
-        status: data.status || 'queued',
-        progress: progressUpdate,
-        uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
-        conversionId: conversionId,
-      };
+    const restartCount = data.restartCount || 0;
+    const isActive = ['queued', 'processing'].includes(data.status);
+    const canRestartDone = data.status === 'done' && restartCount < 1;
 
-      // Handling the outputPath for MP4 to MP3 conversion (handling null case)
-      if (data.outputPath) {
-        updatedData.outputPath = data.outputPath;
-      } else {
-        updatedData.outputPath = null;  // Ensure outputPath is set to null if not available
-      }
+    if (!isActive && !canRestartDone) return null;
 
-      // Step 1: First update for conversion process
-      if (progressUpdate < 100) {
-        updatedData.progress = Math.min(progressUpdate + 10, 100);
-        updatedData.status = 'processing';
-      } else {
-        updatedData.status = 'done';
-      }
+    const progress = data.progress || 0;
+    const newProgress = Math.min(progress + 10, 100);
 
-      // Update Firestore with the new progress, status, and outputPath
-      await admin.firestore()
-        .collection('users')
-        .doc(userId)
-        .collection('processQueue')
-        .doc(conversionId)
-        .set(updatedData, { merge: true });
+    const updatedData: ProcessQueueData = {
+      type: 'conversion',
+      progress: newProgress,
+      status: 'processing',
+      uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
+      conversionId,
+      outputPath: data.outputPath || null,
+      restartCount: canRestartDone ? restartCount + 1 : restartCount,
+    };
+
+    if (newProgress >= 100 && data.outputPath) {
+      updatedData.status = 'done';
     }
+
+    await admin.firestore()
+      .collection('users')
+      .doc(userId)
+      .collection('processQueue')
+      .doc(conversionId)
+      .set(updatedData, { merge: true });
 
     return null;
   });
 
-// Track the process of transcriptions
+
+// Track transcription progress
 export const trackTranscriptionQueue = functions.firestore
   .onDocumentWritten('users/{userId}/transcriptions/{transcriptionId}', async (event) => {
     const { userId, transcriptionId } = event.params;
@@ -431,40 +402,33 @@ export const trackTranscriptionQueue = functions.firestore
     }
 
     const data = event.data.after.data();
+    if (!data) return null;
 
-    if (data) {
-      const progressUpdate = data.progress >= 10 ? data.progress : 10;
-      const updatedData: ProcessQueueData = {
-        type: 'transcription',
-        status: data.status || 'queued',
-        progress: progressUpdate,
-        uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
-        transcriptionId: transcriptionId,
-      };
+    const restartCount = data.restartCount || 0;
+    const isActive = ['queued', 'processing'].includes(data.status);
+    const canRestartDone = data.status === 'done' && restartCount < 1;
 
-      // Handling the txtPath for transcription process (handling null case)
-      if (data.txtPath) {
-        updatedData.txtPath = data.txtPath;
-      } else {
-        updatedData.txtPath = null;  // Ensure txtPath is set to null if not available
-      }
+    if (!isActive && !canRestartDone) return null;
 
-      // Step 1: First update for transcription process
-      if (progressUpdate < 100) {
-        updatedData.progress = Math.min(progressUpdate + 10, 100);
-        updatedData.status = 'processing';
-      } else {
-        updatedData.status = 'done';
-      }
+    const progress = data.progress || 0;
+    const newProgress = Math.min(progress + 10, 100);
 
-      // Update Firestore with the new progress, status, and txtPath if available
-      await admin.firestore()
-        .collection('users')
-        .doc(userId)
-        .collection('processQueue')
-        .doc(transcriptionId)
-        .set(updatedData, { merge: true });
-    }
+    const updatedData: ProcessQueueData = {
+      type: 'transcription',
+      status: newProgress < 100 ? 'processing' : 'done',
+      progress: newProgress,
+      uploadedAt: data.uploadedAt || admin.firestore.FieldValue.serverTimestamp(),
+      transcriptionId,
+      txtPath: data.txtPath || null,
+      restartCount: canRestartDone ? restartCount + 1 : restartCount,
+    };
+
+    await admin.firestore()
+      .collection('users')
+      .doc(userId)
+      .collection('processQueue')
+      .doc(transcriptionId)
+      .set(updatedData, { merge: true });
 
     return null;
   });
