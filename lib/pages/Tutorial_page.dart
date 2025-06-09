@@ -235,7 +235,27 @@ class _TutorialPageState extends State<TutorialPage> {
             ],
           ),
 
-          //tutorial_page.dart => replace positioned 
+          //click to change page
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (details) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final dx = details.localPosition.dx;
+
+              if (dx > screenWidth / 2 && _currentPage < 5) {
+                _controller.nextPage(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+              } else if (dx <= screenWidth / 2 && _currentPage > 0) {
+                _controller.previousPage(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+              }
+            },
+          ),
+
 
           Positioned(
             bottom: 20,

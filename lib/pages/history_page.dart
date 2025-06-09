@@ -5,8 +5,15 @@ import 'package:saywhat_app/pages/auth_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class HistoryDrawer extends StatelessWidget {
+class HistoryDrawer extends StatefulWidget {
   const HistoryDrawer({super.key});
+
+  @override
+  State<HistoryDrawer> createState() => _HistoryDrawerState();
+}
+
+class _HistoryDrawerState extends State<HistoryDrawer> {
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
@@ -36,27 +43,31 @@ class HistoryDrawer extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const TextField(
-                decoration: InputDecoration(
+              child: TextField(
+                decoration: const InputDecoration(
                   hintText: 'Search...',
                   border: InputBorder.none,
                   prefixIcon: Icon(Icons.search),
                   contentPadding: EdgeInsets.all(12),
                 ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase();
+                  });
+                },
               ),
             ),
           ),
           const SizedBox(height: 16),
           Expanded(
-            child:
-                user != null
-                    ? _buildHistoryList(user.uid)
-                    : const Center(
-                      child: Text(
-                        'Please log in to view history.',
-                        style: TextStyle(color: Colors.white70),
-                      ),
+            child: user != null
+                ? _buildHistoryList(user.uid)
+                : const Center(
+                    child: Text(
+                      'Please log in to view history.',
+                      style: TextStyle(color: Colors.white70),
                     ),
+                  ),
           ),
           const Divider(color: Colors.white24),
           _buildLoginOrLogoutButton(context, user),
@@ -67,12 +78,11 @@ class HistoryDrawer extends StatelessWidget {
   }
 
   Widget _buildHistoryList(String userId) {
-    final historyStream =
-        FirebaseFirestore.instance
-            .collection("users")
-            .doc(userId)
-            .collection("transcriptions")
-            .snapshots();
+    final historyStream = FirebaseFirestore.instance
+        .collection("users")
+        .doc(userId)
+        .collection("transcriptions")
+        .snapshots();
 
     return StreamBuilder<QuerySnapshot>(
       stream: historyStream,
@@ -90,7 +100,10 @@ class HistoryDrawer extends StatelessWidget {
           );
         }
 
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data!.docs.where((doc) {
+          final id = doc.id.toLowerCase();
+          return id.contains(_searchQuery);
+        }).toList();
 
         return ListView.builder(
           itemCount: docs.length,
@@ -108,15 +121,10 @@ class HistoryDrawer extends StatelessWidget {
               ),
               onTap: () async {
                 if (txtPath != null) {
-                  final storageRef = FirebaseStorage.instance.ref().child(
-                    txtPath,
-                  );
+                  final storageRef = FirebaseStorage.instance.ref().child(txtPath);
                   final url = await storageRef.getDownloadURL();
                   if (await canLaunchUrl(Uri.parse(url))) {
-                    await launchUrl(
-                      Uri.parse(url),
-                      mode: LaunchMode.externalApplication,
-                    );
+                    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Cannot launch file")),
@@ -138,7 +146,7 @@ class HistoryDrawer extends StatelessWidget {
         title: const Text('Logout', style: TextStyle(color: Colors.white)),
         onTap: () async {
           await FirebaseAuth.instance.signOut();
-          Navigator.pop(context); // Close the drawer
+          Navigator.pop(context);
         },
       );
     } else {
@@ -146,7 +154,7 @@ class HistoryDrawer extends StatelessWidget {
         leading: const Icon(Icons.login, color: Colors.white),
         title: const Text('Login', style: TextStyle(color: Colors.white)),
         onTap: () {
-          Navigator.pop(context); // Close the drawer
+          Navigator.pop(context);
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const AuthPage()),
@@ -156,3 +164,4 @@ class HistoryDrawer extends StatelessWidget {
     }
   }
 }
+

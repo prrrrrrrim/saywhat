@@ -52,7 +52,7 @@ class _TranslatePageState extends State<TranslatePage> {
 
   @override
   Widget build(BuildContext context) {
-    final Color darkGreen = const Color(0xFF06261C);
+    final Color darkGreen = Colors.black;
     final Color lightPurple = const Color(0xFFE7DDF7);
 
     return Scaffold(

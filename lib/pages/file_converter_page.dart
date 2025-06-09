@@ -136,7 +136,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
             : (_selectedFile?.path.split('/').last ?? 'No file selected');
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0E241C),
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: const Color(0xFFECEFDA),
         elevation: 0,

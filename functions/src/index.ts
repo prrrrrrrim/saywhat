@@ -282,8 +282,14 @@ export const transcribeWhisperOnUpload = onObjectFinalized(
         const summaryChat = await openai.chat.completions.create({
           model: 'gpt-3.5-turbo',
           messages: [
-            { role: 'system', content: `Summarize this ${toLanguage}.` },
-            { role: 'user', content: translatedText },
+            {
+              role: 'system',
+              content: `You are a helpful assistant that summarizes texts into concise, well-organized summaries. Use clear headings and subheadings where appropriate.`
+            },
+            {
+              role: 'user',
+              content: `Please summarize the following text in ${toLanguage}:\n\n${translatedText}`
+            }
           ],
         });
 

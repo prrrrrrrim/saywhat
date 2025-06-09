@@ -126,7 +126,7 @@ class _TranscribePageState extends State<TranscribePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF092118),
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: const Color(0xFFECEFDA),
         leading: IconButton(
@@ -140,6 +140,16 @@ class _TranscribePageState extends State<TranscribePage> {
           ),
         ),
         elevation: 0,
+        actions: [
+        Tooltip(
+          message: 'The converter function helps you convert MP4 or WAV files into MP3 format',
+          child: IconButton(
+            icon: const Icon(Icons.info_outline),
+            color: Colors.black,
+            onPressed: () {},
+          ),
+        ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),

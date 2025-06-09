@@ -19,7 +19,7 @@ class HomePage extends StatelessWidget {
     final User? user = Provider.of<User?>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0E241C),
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: const Color(0xFFECEFDA),
         elevation: 0,
@@ -38,9 +38,12 @@ class HomePage extends StatelessWidget {
         actions: [
           if (user != null)
             IconButton(
-              icon: const Icon(Icons.notifications, size: 32),
+              icon: const Icon(Icons.help_outline, size: 32, color: Colors.black),
               onPressed: () {
-                print('Notifications tapped!');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const TutorialPage()),
+                );
               },
             ),
           IconButton(
@@ -116,7 +119,8 @@ class HomePage extends StatelessWidget {
   ),
 ),
 
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: user == null
+    ? FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
@@ -134,7 +138,8 @@ class HomePage extends StatelessWidget {
         },
         backgroundColor: const Color(0xFFE8DFF9),
         child: const Icon(Icons.help_outline, color: Colors.black),
-      ),
+      )
+    : null,
     );
   }
 

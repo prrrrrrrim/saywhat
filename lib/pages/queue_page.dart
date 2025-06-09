@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:saywhat_app/pages/home.dart';
 
 class QueuePage extends StatelessWidget {
   const QueuePage({super.key});
@@ -33,7 +34,26 @@ class QueuePage extends StatelessWidget {
         foregroundColor: Colors.black,
         leading: IconButton(
           icon: const Icon(Icons.home, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              PageRouteBuilder(
+                transitionDuration: const Duration(milliseconds: 500),
+                pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(-1.0, 0.0); // Slide from left
+                  const end = Offset.zero;
+                  final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+                  final offsetAnimation = animation.drive(tween);
+
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
+              ),
+            );
+          },
         ),
         actions: const [
           Tooltip(
@@ -43,7 +63,7 @@ class QueuePage extends StatelessWidget {
           ),
         ],
       ),
-      backgroundColor: const Color(0xFF08251E),
+      backgroundColor: Colors.black,
       body: StreamBuilder<QuerySnapshot>(
         stream: processQueueStream,
         builder: (context, snapshot) {
