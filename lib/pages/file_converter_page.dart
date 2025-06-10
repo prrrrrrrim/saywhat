@@ -36,7 +36,7 @@ class _FileConverterPageState extends State<FileConverterPage> {
   void _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['mp4'],
+      allowedExtensions: ['mp4','wav'],
     );
 
     if (result != null) {

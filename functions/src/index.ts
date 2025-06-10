@@ -87,7 +87,7 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
 
   const filePath = object.name;
   const contentType = object.contentType;
-  if (!filePath || !filePath.endsWith('.mp4')) {
+  if (!filePath || (!filePath.endsWith('.mp4') && !filePath.endsWith('.wav'))) {
     console.log('Not an MP4 file. Skipping...');
     return;
   }
@@ -97,7 +97,9 @@ export const convertMp4ToMp3 = onObjectFinalized({ region: 'us-west1' }, async (
 
   const fileName = path.basename(filePath);
   const fileDir = path.dirname(filePath);
-  const baseName = path.basename(fileName, '.mp4');
+  const baseName = filePath.endsWith('.mp4')
+  ? path.basename(fileName, '.mp4')
+  : path.basename(fileName, '.wav');
   const tempInput = path.join(os.tmpdir(), fileName);
   const tempOutput = path.join(os.tmpdir(), `${baseName}.mp3`);
   const outputStoragePath = path.join(fileDir, `${baseName}.mp3`);
@@ -373,7 +375,7 @@ export const trackProcessQueue = functions.firestore
 
     const currentProgress = data.progress || 0;
     const doneStep = data.doneStep || 0;
-    const newDoneStep = isFakingDone ? doneStep + 1 : 0; // Increment doneStep on each "done" cycle
+    const newDoneStep = isFakingDone ? doneStep + 1 : 0;
     const newProgress = isFakingDone ? 100 : Math.min(currentProgress + 10, 100); // Keep progress at 100 during fake updates
 
     const updatedData: ProcessQueueData = {

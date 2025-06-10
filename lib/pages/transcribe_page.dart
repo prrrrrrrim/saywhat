@@ -142,7 +142,7 @@ class _TranscribePageState extends State<TranscribePage> {
         elevation: 0,
         actions: [
         Tooltip(
-          message: 'The converter function helps you convert MP4 or WAV files into MP3 format',
+          message: 'The transcription function helps you transcribe MP3 into txt format',
           child: IconButton(
             icon: const Icon(Icons.info_outline),
             color: Colors.black,
@@ -270,9 +270,9 @@ class _TranscribePageState extends State<TranscribePage> {
                     context: context,
                     builder:
                         (ctx) => AlertDialog(
-                          title: const Text('Confirm Conversion'),
+                          title: const Text('Confirm Transcription'),
                           content: const Text(
-                            'Are you sure you want to start the file converter?',
+                            'Are you sure you want to start the transcription?',
                           ),
                           actions: [
                             TextButton(
